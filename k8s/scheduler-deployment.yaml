@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queuepilot-scheduler
+spec:
+  # Safe to run at 2 replicas because the scheduler uses leader election - only
+  # the elected leader promotes, the rest sit as standbys. No HPA here: promotion
+  # throughput isn't the bottleneck this scales.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: queuepilot-scheduler
+  template:
+    metadata:
+      labels:
+        app: queuepilot-scheduler
+    spec:
+      containers:
+        - name: scheduler
+          # Real deploys should reference a registry-qualified image (e.g.
+          # <account>.dkr.ecr.<region>.amazonaws.com/queuepilot-scheduler:<tag>), not :latest.
+          image: queuepilot-scheduler:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9090
+              name: metrics
+          envFrom:
+            - configMapRef:
+                name: queuepilot-config
+            - secretRef:
+                name: queuepilot-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
