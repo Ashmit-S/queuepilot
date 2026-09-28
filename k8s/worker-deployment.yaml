@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queuepilot-worker
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: queuepilot-worker
+  template:
+    metadata:
+      labels:
+        app: queuepilot-worker
+    spec:
+      containers:
+        - name: worker
+          # Real deploys should reference a registry-qualified image (e.g.
+          # <account>.dkr.ecr.<region>.amazonaws.com/queuepilot-worker:<tag>), not :latest.
+          image: queuepilot-worker:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 9090
+              name: metrics
+          envFrom:
+            - configMapRef:
+                name: queuepilot-config
+            - secretRef:
+                name: queuepilot-secrets
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: queuepilot-worker
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: queuepilot-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70

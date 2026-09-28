@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: queuepilot
+          POSTGRES_PASSWORD: queuepilot
+          POSTGRES_DB: queuepilot
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U queuepilot -d queuepilot"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgres://queuepilot:queuepilot@localhost:5432/queuepilot?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+      - run: go build ./...
+      - run: go vet ./...
+      - run: go test ./... -race
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26.5"
+      # v7 required for golangci-lint v2 (v6 only supports v1, which is built with a
+      # Go toolchain too old for this project's go 1.26.5 in go.mod).
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+
+  docker-build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service: [api, worker, scheduler, postgres-replica]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile.${{ matrix.service }}
+          push: false
